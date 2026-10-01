@@ -9,6 +9,7 @@ ai_decide: free (Databricks DBUs), one batched SQL.
 
 from __future__ import annotations
 
+import os
 import json
 import subprocess
 
@@ -17,7 +18,7 @@ from dotenv import load_dotenv
 from decision import load_config
 
 load_dotenv()
-PROFILE = "FEVM_SERVERLESS_STABLE"
+PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
 cfg = load_config("decision_config_v2.json")
 cases = cfg["cases"]
 q = next(x for x in cfg["questions"] if x["name"] == "is_urgent")

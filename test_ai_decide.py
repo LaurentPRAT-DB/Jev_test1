@@ -8,7 +8,7 @@ The identical spec runs against TypeSafe jev in `test_jev_decision.py`, so the
 two engines are compared on exactly the same questions and cases.
 
 Env:
-    DATABRICKS_PROFILE   CLI profile (default: FEVM_SERVERLESS_STABLE)
+    DATABRICKS_PROFILE   CLI profile (default: DEFAULT)
 
 Run:
     .venv/bin/python -m pytest test_ai_decide.py -v
@@ -29,7 +29,7 @@ from decision import (
     to_ai_decide_questions,
 )
 
-PROFILE = os.environ.get("DATABRICKS_PROFILE", "FEVM_SERVERLESS_STABLE")
+PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
 CFG = load_config()
 QUESTIONS_JSON = to_ai_decide_questions(CFG)
 

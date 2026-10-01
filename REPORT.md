@@ -1,11 +1,11 @@
 # ai_decide vs TypeSafe jev — classification comparison
 
-_Generated 2026-10-01T07:49:54+00:00 · profile `FEVM_SERVERLESS_STABLE` · 6 cases × 6 questions_
+_Generated 2026-10-01T07:49:54+00:00 · profile your Databricks SQL warehouse profile · 6 cases × 6 questions_
 
 ## Setup
 
 - **Spec**: `decision_config_v2.json` — 6 questions (2 choice, 2 noul, 2 score), long-form support content (~150–200 words/case).
-- **ai_decide**: Databricks SQL on `FEVM_SERVERLESS_STABLE` (serverless warehouse).
+- **ai_decide**: Databricks SQL on your Databricks SQL warehouse profile (serverless warehouse).
 - **jev**: TypeSafe System One via `jev` (2 credit calls total — 1 batched map + 1 single).
 
 ## Results — ai_decide

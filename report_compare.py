@@ -15,6 +15,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import json
 import statistics
 import subprocess
@@ -34,7 +35,7 @@ from decision import (
 
 load_dotenv()
 
-PROFILE = "FEVM_SERVERLESS_STABLE"
+PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
 CONFIG = "decision_config_v2.json"
 AI_ONLY = "--ai-only" in sys.argv
 

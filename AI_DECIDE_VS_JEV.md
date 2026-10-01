@@ -71,7 +71,7 @@ Pushing per-event data *into* Databricks just to run `ai_decide` adds a round-tr
 
 ## Performance (measured, this environment)
 
-Small FEVM serverless warehouse, 1 noul, via CLI:
+Small serverless warehouse, 1 noul, via CLI:
 
 | metric | ai_decide | jev |
 |---|---|---|

@@ -34,7 +34,7 @@ Worked example of the pattern in [`../../CONFIG_GUIDE.md`](../../CONFIG_GUIDE.md
 # live TypeSafe jev — ONE batched System One call (uses ../../.env key)
 ../../.venv/bin/python run.py --engine jev
 
-# live Databricks ai_decide — ONE batched SQL call on FEVM_SERVERLESS_STABLE
+# live Databricks ai_decide — ONE batched SQL call on your-profile
 ../../.venv/bin/python run.py --engine ai_decide
 
 # unit tests (offline)

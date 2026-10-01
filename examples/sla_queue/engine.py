@@ -11,10 +11,11 @@ either way — content is queried once; SLA thresholds are applied later in code
 
 from __future__ import annotations
 
+import os
 import json
 import subprocess
 
-PROFILE = "FEVM_SERVERLESS_STABLE"
+PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
 
 # Offline stand-in for the model: a transparent keyword heuristic. NOT a model —
 # just enough signal that identical bodies get identical, semantically plausible
