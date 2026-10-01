@@ -2,6 +2,8 @@
 
 *I ran the identical classification spec through both. The answers matched. The question that remains isn't "which is smarter" — it's "where does your data live?"*
 
+![The same model, two front doors: ai_decide and jev both call TypeSafe System One](images/hero.png)
+
 ---
 
 ## The realization nobody told me about

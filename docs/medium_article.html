@@ -21,11 +21,13 @@
   blockquote { border-left: 4px solid #FF3621; margin: 1em 0; padding: 0.2em 1em; color: #555; }
   .gist-marker { background: #fff3cd; border: 2px dashed #ffc107; padding: 12px; border-radius: 5px; margin: 1em 0; font-family: monospace; font-size: 0.9em; }
   .mobile-fallback { font-style: italic; color: #666; font-size: 0.9em; margin-top: 0.5em; }
+  .code-alt { font-size: 0.85em; color: #777; margin-top: -0.4em; }
 </style>
 </head>
 <body>
 <h1>Databricks <code>ai_decide</code> and TypeSafe's <code>jev</code> Are the Same Model — Here's When to Use Which</h1>
 <p><em>I ran the identical classification spec through both. The answers matched. The question that remains isn't "which is smarter" — it's "where does your data live?"</em></p>
+<p><img alt="The same model, two front doors: ai_decide and jev both call TypeSafe System One" src="images/hero.png" /></p>
 <hr />
 <h2>The realization nobody told me about</h2>
 <p>I was evaluating <a href="https://pypi.org/project/jev/">TypeSafe's <code>jev</code></a> — a neat little Python library that turns a function signature into a structured LLM decision. No prompt strings, no JSON schema to babysit: you declare a Pydantic return model, and each field becomes a typed question. The model answers with calibrated probabilities and <strong>generates no free text at all</strong>.</p>
