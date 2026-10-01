@@ -8,12 +8,17 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import markdown
 
+# --inline: keep all code as native HTML code blocks (no Gists, no post-import
+# gist step). Default: replace the 4 code blocks with Gist markers.
+INLINE = "--inline" in sys.argv
+
 SRC = Path("docs/MEDIUM_ARTICLE.md")
-OUT = Path("docs/medium_article.html")
+OUT = Path("docs/medium_article_inline.html" if INLINE else "docs/medium_article.html")
 VERSION = "1.0.0"
 DATE = "2026-10-01"
 
@@ -35,21 +40,23 @@ def replace_block(md: str, sig: str, token: str) -> str:
         return token if sig in m.group(1) else m.group(0)
     return pattern.sub(repl, md, count=0)
 
-for sig, gid, n in GISTS:
-    md = replace_block(md, sig, f"\n\n[[GIST{n}]]\n\n")
+if not INLINE:
+    for sig, gid, n in GISTS:
+        md = replace_block(md, sig, f"\n\n[[GIST{n}]]\n\n")
 
 body = markdown.markdown(md, extensions=["tables", "fenced_code"])
 
 USER = "LaurentPRAT-DB"
-for sig, gid, n in GISTS:
-    marker = (
-        f'<p class="gist-marker">GIST #{n} — DELETE THIS BLOCK, PASTE THE URL ON AN EMPTY LINE:<br>'
-        f'https://gist.github.com/{USER}/{gid}</p>\n'
-        f'<script src="https://gist.github.com/{USER}/{gid}.js"></script>\n'
-        f'<p class="mobile-fallback">📱 On mobile? '
-        f'<a href="https://gist.github.com/{USER}/{gid}/raw">View raw code</a></p>'
-    )
-    body = body.replace(f"<p>[[GIST{n}]]</p>", marker)
+if not INLINE:
+    for sig, gid, n in GISTS:
+        marker = (
+            f'<p class="gist-marker">GIST #{n} — DELETE THIS BLOCK, PASTE THE URL ON AN EMPTY LINE:<br>'
+            f'https://gist.github.com/{USER}/{gid}</p>\n'
+            f'<script src="https://gist.github.com/{USER}/{gid}.js"></script>\n'
+            f'<p class="mobile-fallback">📱 On mobile? '
+            f'<a href="https://gist.github.com/{USER}/{gid}/raw">View raw code</a></p>'
+        )
+        body = body.replace(f"<p>[[GIST{n}]]</p>", marker)
 
 html = f"""<!DOCTYPE html>
 <!--
@@ -83,6 +90,9 @@ html = f"""<!DOCTYPE html>
 """
 
 OUT.write_text(html)
-remaining = [n for _, _, n in GISTS if f"GIST #{n}" not in html]
-print(f"wrote {OUT} ({len(html)} bytes); gist markers present: "
-      f"{[n for _, _, n in GISTS if f'GIST #{n}' in html]}; missing: {remaining}")
+if INLINE:
+    print(f"wrote {OUT} ({len(html)} bytes); mode=inline (native code blocks, "
+          f"no gists); code <pre> blocks: {html.count('<pre>')}")
+else:
+    present = [n for _, _, n in GISTS if f"GIST #{n}" in html]
+    print(f"wrote {OUT} ({len(html)} bytes); mode=gist; markers present: {present}")
