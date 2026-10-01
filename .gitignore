@@ -12,3 +12,7 @@ doc/
 *.key
 *secret*
 *token*
+
+# medium-article build tooling (keep the repo focused on jev testing;
+# the published article lives under docs/, generators stay local)
+build_html.py
