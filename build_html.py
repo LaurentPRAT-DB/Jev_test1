@@ -13,12 +13,21 @@ from pathlib import Path
 
 import markdown
 
-# --inline: keep all code as native HTML code blocks (no Gists, no post-import
-# gist step). Default: replace the 4 code blocks with Gist markers.
+# Modes:
+#   (default)  --gist   : replace the 4 code blocks with Gist markers (manual embed)
+#   --inline            : native code blocks only, no gists
+#   --hybrid            : native code blocks (visible on import) + a small
+#                         "view as Gist" link under each — code is seen directly,
+#                         gist kept as an alternative. RECOMMENDED.
 INLINE = "--inline" in sys.argv
+HYBRID = "--hybrid" in sys.argv
 
 SRC = Path("docs/MEDIUM_ARTICLE.md")
-OUT = Path("docs/medium_article_inline.html" if INLINE else "docs/medium_article.html")
+OUT = Path(
+    "docs/medium_article_inline.html" if INLINE
+    else "docs/medium_article_hybrid.html" if HYBRID
+    else "docs/medium_article.html"
+)
 VERSION = "1.0.0"
 DATE = "2026-10-01"
 
@@ -40,14 +49,27 @@ def replace_block(md: str, sig: str, token: str) -> str:
         return token if sig in m.group(1) else m.group(0)
     return pattern.sub(repl, md, count=0)
 
-if not INLINE:
+USER = "LaurentPRAT-DB"
+
+
+def append_after_block(md: str, sig: str, token: str) -> str:
+    """Insert token immediately AFTER the fenced block containing sig."""
+    pattern = re.compile(r"(```[a-zA-Z]*\n.*?```)", re.DOTALL)
+    def repl(m):
+        return m.group(1) + token if sig in m.group(1) else m.group(1)
+    return pattern.sub(repl, md, count=0)
+
+
+if not INLINE and not HYBRID:          # gist-marker mode
     for sig, gid, n in GISTS:
         md = replace_block(md, sig, f"\n\n[[GIST{n}]]\n\n")
+elif HYBRID:                           # native code + gist alt-link after each
+    for sig, gid, n in GISTS:
+        md = append_after_block(md, sig, f"\n\n[[GALT{n}]]\n\n")
 
 body = markdown.markdown(md, extensions=["tables", "fenced_code"])
 
-USER = "LaurentPRAT-DB"
-if not INLINE:
+if not INLINE and not HYBRID:
     for sig, gid, n in GISTS:
         marker = (
             f'<p class="gist-marker">GIST #{n} — DELETE THIS BLOCK, PASTE THE URL ON AN EMPTY LINE:<br>'
@@ -57,6 +79,13 @@ if not INLINE:
             f'<a href="https://gist.github.com/{USER}/{gid}/raw">View raw code</a></p>'
         )
         body = body.replace(f"<p>[[GIST{n}]]</p>", marker)
+elif HYBRID:
+    for sig, gid, n in GISTS:
+        alt = (
+            f'<p class="code-alt">📎 Prefer syntax highlighting? '
+            f'<a href="https://gist.github.com/{USER}/{gid}">View as a GitHub Gist</a></p>'
+        )
+        body = body.replace(f"<p>[[GALT{n}]]</p>", alt)
 
 html = f"""<!DOCTYPE html>
 <!--
@@ -81,6 +110,7 @@ html = f"""<!DOCTYPE html>
   blockquote {{ border-left: 4px solid #FF3621; margin: 1em 0; padding: 0.2em 1em; color: #555; }}
   .gist-marker {{ background: #fff3cd; border: 2px dashed #ffc107; padding: 12px; border-radius: 5px; margin: 1em 0; font-family: monospace; font-size: 0.9em; }}
   .mobile-fallback {{ font-style: italic; color: #666; font-size: 0.9em; margin-top: 0.5em; }}
+  .code-alt {{ font-size: 0.85em; color: #777; margin-top: -0.4em; }}
 </style>
 </head>
 <body>
@@ -91,8 +121,10 @@ html = f"""<!DOCTYPE html>
 
 OUT.write_text(html)
 if INLINE:
-    print(f"wrote {OUT} ({len(html)} bytes); mode=inline (native code blocks, "
-          f"no gists); code <pre> blocks: {html.count('<pre>')}")
+    print(f"wrote {OUT} ({len(html)} bytes); mode=inline; <pre> blocks: {html.count('<pre>')}")
+elif HYBRID:
+    print(f"wrote {OUT} ({len(html)} bytes); mode=hybrid; <pre> blocks: "
+          f"{html.count('<pre>')}; gist alt-links: {html.count('code-alt')}")
 else:
     present = [n for _, _, n in GISTS if f"GIST #{n}" in html]
     print(f"wrote {OUT} ({len(html)} bytes); mode=gist; markers present: {present}")

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<!--
+  Medium Article: Databricks ai_decide and TypeSafe jev are the same model
+  Version: 1.0.0
+  Last Updated: 2026-10-01
+  Features: Gist markers, mobile fallback links (/raw)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="version" content="1.0.0">
+<meta name="last-updated" content="2026-10-01">
+<title>Databricks ai_decide and TypeSafe jev are the same model</title>
+<style>
+  body { font-family: -apple-system, Georgia, serif; max-width: 740px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; color: #222; }
+  img { max-width: 100%; height: auto; }
+  pre { background: #f6f8fa; padding: 12px; border-radius: 6px; overflow-x: auto; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
+  blockquote { border-left: 4px solid #FF3621; margin: 1em 0; padding: 0.2em 1em; color: #555; }
+  .gist-marker { background: #fff3cd; border: 2px dashed #ffc107; padding: 12px; border-radius: 5px; margin: 1em 0; font-family: monospace; font-size: 0.9em; }
+  .mobile-fallback { font-style: italic; color: #666; font-size: 0.9em; margin-top: 0.5em; }
+  .code-alt { font-size: 0.85em; color: #777; margin-top: -0.4em; }
+</style>
+</head>
+<body>
+<h1>Databricks <code>ai_decide</code> and TypeSafe's <code>jev</code> Are the Same Model — Here's When to Use Which</h1>
+<p><em>I ran the identical classification spec through both. The answers matched. The question that remains isn't "which is smarter" — it's "where does your data live?"</em></p>
+<hr />
+<h2>The realization nobody told me about</h2>
+<p>I was evaluating <a href="https://pypi.org/project/jev/">TypeSafe's <code>jev</code></a> — a neat little Python library that turns a function signature into a structured LLM decision. No prompt strings, no JSON schema to babysit: you declare a Pydantic return model, and each field becomes a typed question. The model answers with calibrated probabilities and <strong>generates no free text at all</strong>.</p>
+<p>Then I opened the Databricks SQL docs for <a href="https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_decide"><code>ai_decide</code></a> and did a double take. Same three question types. Same request shape. Same response fields.</p>
+<p>They are the <strong>same engine</strong> — TypeSafe's "System One" model — exposed two ways: a Python SDK (<code>jev</code>) and a SQL function (<code>ai_decide</code>).</p>
+<p><img alt="Two clients, one engine" src="images/same_engine.png" />
+<em><code>jev</code> and <code>ai_decide</code> are two front doors to the same System One engine. The three primitives — noul, choice, score — are identical.</em></p>
+<p>So the interesting question was never "which gives better answers." I measured that too (they agree). The real decision is <strong>operational</strong>: latency, scale, cost, and above all — <strong>where your data already lives.</strong></p>
+<hr />
+<h2>What you'll learn</h2>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>For whom</th>
+<th>Time</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The 2-minute summary</td>
+<td>Executives, architects</td>
+<td>2 min</td>
+</tr>
+<tr>
+<td>How the model actually works</td>
+<td>Developers</td>
+<td>6 min</td>
+</tr>
+<tr>
+<td>The benchmark: do they agree?</td>
+<td>Developers, data teams</td>
+<td>4 min</td>
+</tr>
+<tr>
+<td>The deciding factor: data gravity</td>
+<td>Architects</td>
+<td>3 min</td>
+</tr>
+<tr>
+<td>Worked example: SLA-aware routing</td>
+<td>Developers</td>
+<td>5 min</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>For executives: the 2-minute summary</h2>
+<p>You do not have to choose a different <em>model</em> for Python apps vs. your lakehouse. It's <strong>one model, two interfaces</strong>:</p>
+<ul>
+<li><strong><code>ai_decide</code></strong> is a SQL function. If your data is already in Delta / Unity Catalog, you classify it <strong>in place</strong> — no export, no new service, results land as governed columns.</li>
+<li><strong><code>jev</code></strong> is a Python library. If decisions happen on a live request path (a queue consumer, a webhook, an app), it gives you <strong>sub-second latency</strong> and typed objects.</li>
+</ul>
+<p><strong>Without this insight:</strong> teams stand up a separate inference service, export data to it, and reconcile two "AI vendors."</p>
+<p><strong>With it:</strong> one engine, picked by delivery context. Batch at rest → <code>ai_decide</code>. Real-time at the edge → <code>jev</code>. Same semantics, so a hybrid is safe.</p>
+<blockquote>
+<p><strong>Executive action item:</strong> if you're already on Databricks, your structured-decision workloads over tables need no new infrastructure — it's a SQL function.</p>
+</blockquote>
+<hr />
+<h2>For developers: how the model actually works</h2>
+<p>The whole model is <strong>three primitives</strong>. Every decision field is one of them:</p>
+<ul>
+<li><strong>noul</strong> — a yes/no question → one calibrated probability <code>p ∈ [0,1]</code>. No separate confidence; <code>p</code> <em>is</em> the certainty.</li>
+<li><strong>choice</strong> — pick one from an <strong>unordered</strong> set → the winning label + full distribution + confidence.</li>
+<li><strong>score</strong> — rate along an <strong>ordered</strong> spectrum → an expected value (can land between levels) + confidence.</li>
+</ul>
+<p>The subtle part is the noul, and it's where most of the "why did it decide that?" confusion lives. There are <strong>two layers</strong>, owned by two different parties:</p>
+<p><img alt="Two layers: model shapes p, you cut p" src="images/two_layer.png" />
+<em>The model owns where <code>p</code> lands (shaped only by your wording). You own where to cut <code>p</code> into a verdict.</em></p>
+<p><strong>Layer 1 — the model emits <code>p</code>.</strong> You can't dial a confidence number. You <em>influence</em> <code>p</code> only through the question's <code>instructions</code> and <code>criteria</code>: a sharp, concrete question pushes <code>p</code> toward 0 or 1; a vague one leaves it near 0.5.</p>
+<p><strong>Layer 2 — you cut <code>p</code>.</strong> A single threshold turns <code>p</code> into a bool. A <em>band</em> turns it into three outcomes — and this is the pattern worth stealing:</p>
+<pre><code class="language-python">def verdict(p, yes=0.8, no=0.2):
+    if p &gt;= yes:  return &quot;yes&quot;      # confident
+    if p &lt;= no:   return &quot;no&quot;       # confident
+    return &quot;review&quot;                 # uncertain -&gt; route to a human
+</code></pre>
+<p class="code-alt">📎 Prefer syntax highlighting? <a href="https://gist.github.com/LaurentPRAT-DB/6c495c8005a0e1c9184c7bd45ab21805">View as a GitHub Gist</a></p>
+<p>That's it. The model gives you a calibrated float; you decide the policy.</p>
+<p>Here's the same decision expressed both ways. In <code>jev</code>, the Pydantic model <em>is</em> the schema:</p>
+<pre><code class="language-python">from typing import Literal
+from pydantic import BaseModel, Field
+import jev
+
+class Triage(BaseModel):
+    department: Literal[&quot;billing&quot;, &quot;technical&quot;, &quot;sales&quot;]
+    is_urgent: bool
+    severity: int = Field(ge=1, le=5)
+
+triage = jev.decide(&quot;I was charged twice and want a refund!&quot;, Triage)
+</code></pre>
+<p class="code-alt">📎 Prefer syntax highlighting? <a href="https://gist.github.com/LaurentPRAT-DB/f17b7d8ec6dad852de0ddd9a1f770ee4">View as a GitHub Gist</a></p>
+<p>In <code>ai_decide</code>, the questions are JSON and the answer is a <code>VARIANT</code> column:</p>
+<pre><code class="language-sql">SELECT ai_decide(
+  'I was charged twice and want a refund!',
+  '{
+    &quot;department&quot;: {&quot;type&quot;: &quot;choice&quot;, &quot;instructions&quot;: &quot;Which team?&quot;,
+      &quot;criteria&quot;: {&quot;billing&quot;: &quot;Payments&quot;, &quot;technical&quot;: &quot;Bugs&quot;, &quot;sales&quot;: &quot;Pricing&quot;}},
+    &quot;is_urgent&quot;: {&quot;type&quot;: &quot;noul&quot;, &quot;instructions&quot;: &quot;Needs a fast response?&quot;},
+    &quot;severity&quot;: {&quot;type&quot;: &quot;score&quot;, &quot;instructions&quot;: &quot;Rate severity&quot;,
+      &quot;criteria&quot;: [&quot;Trivial&quot;,&quot;Minor&quot;,&quot;Moderate&quot;,&quot;Serious&quot;,&quot;Critical&quot;]}
+  }'
+) AS decision;
+</code></pre>
+<p class="code-alt">📎 Prefer syntax highlighting? <a href="https://gist.github.com/LaurentPRAT-DB/2f8aedfe6cd206a12f020f8415ada2c2">View as a GitHub Gist</a></p>
+<p>Same questions, same answers — one returns a typed object, the other a column.</p>
+<hr />
+<h2>The benchmark: do they actually agree?</h2>
+<p>I built one neutral spec and ran it through <strong>both</strong> engines — six long-form support tickets, six questions each (2 choice, 2 noul, 2 score).</p>
+<p><strong>Exact agreement: 25/36 (69%).</strong> But that headline undersells it:</p>
+<ul>
+<li><strong>Hard labels agreed perfectly.</strong> <code>category</code> 6/6, <code>requires_human</code> 6/6.</li>
+<li><strong>Scores agreed within ±1 on every case</strong> (6/6) — same ranking, ±1 notch of sampling noise.</li>
+<li><strong>The only real divergence was one noul: <code>is_urgent</code>.</strong> On borderline tickets (an account lockout, a sales inquiry, a GDPR request) <code>ai_decide</code> returned ~0.80–0.99 while <code>jev</code> returned ~0.20–0.29.</li>
+</ul>
+<p>That gap is <strong>not</strong> a bug or a capability difference. It's <strong>calibration</strong>: <code>ai_decide</code> ran hotter on urgency, <code>jev</code> more conservative. And <code>jev</code>'s 0.20–0.29 values sit squarely in the "route to human review" band — the model honestly signalling <em>uncertain</em>. The fix is threshold tuning, not treating one engine as wrong.</p>
+<p><strong>Takeaway:</strong> pick on delivery, not accuracy. On the substance, they're the same model.</p>
+<hr />
+<h2>The deciding factor: data gravity</h2>
+<p><img alt="Decision: where does the data live?" src="images/data_gravity.png" />
+<em>The single most useful question: where is the data right now?</em></p>
+<h3>Data already in Databricks → <code>ai_decide</code></h3>
+<p>If the rows are in a Delta table, <code>ai_decide</code> is almost always right:</p>
+<ul>
+<li><strong>No data movement.</strong> Nothing leaves the lakehouse boundary — no egress, no PII crossing to an external API.</li>
+<li><strong>No fan-out orchestration.</strong> One SQL job instead of a client looping millions of HTTP calls with retries, backoff, and rate-limit handling.</li>
+<li><strong>Scales with the cluster.</strong> It's a distributed op; add workers to raise throughput — no per-request ceiling.</li>
+<li><strong>Results are first-class data.</strong> Output columns join to the source, feed pipelines, and carry <strong>Unity Catalog lineage and governance</strong>.</li>
+</ul>
+<h3>Data at the edge / real-time → <code>jev</code></h3>
+<p>If content arrives as events and you act <em>now</em>: <code>jev</code>'s ~0.3s per-call latency beats a warehouse spin-up, and you get typed Pydantic objects, a mock seam for tests, and per-call control of model and threshold.</p>
+<h3>What the performance numbers say</h3>
+<p>On a small serverless warehouse (one noul), measured end-to-end:</p>
+<ul>
+<li><strong><code>ai_decide</code>:</strong> ≈ 6s fixed + 0.52s/row (~1.9 rows/s on this small warehouse).</li>
+<li><strong><code>jev</code>:</strong> ≈ 0.3s per call, ~0.09s/item batched (~11 rows/s).</li>
+</ul>
+<p>On <em>this</em> warehouse, <code>jev</code> was faster at every batch size from 1 to 100,000 — <strong>no crossover.</strong> But read that carefully: <code>ai_decide</code> is distributed, so its per-row cost drops ~linearly with cluster width. The crossover is <code>0.52s / parallelism &lt; 0.09s</code> — <code>ai_decide</code> wins once the cluster is ~6×+ wider <strong>and</strong> the batch is large enough to amortize the fixed cost. Meanwhile <code>jev</code>'s flat rate is bounded by API concurrency, rate limits, and payload caps at sustained volume.</p>
+<p><strong>So: latency → <code>jev</code>. Raw throughput over data at rest, on a sized cluster → <code>ai_decide</code>.</strong></p>
+<hr />
+<h2>Worked example: SLA-aware routing from a queue</h2>
+<p>Here's where it gets practical. Support tickets arrive from a message queue. The <strong>same ticket text</strong> should be more critical for an enterprise customer than a free one. How do you encode that <em>without</em> re-querying the model per tier?</p>
+<p><img alt="SLA routing: one call, per-ticket cut" src="images/sla_routing.png" />
+<em>The model judges content only (one call). SLA is applied as a per-ticket threshold in code.</em></p>
+<p>The trick: <strong>keep the model SLA-blind.</strong> It emits one content-only probability per ticket. The SLA selects the <em>cut point</em> — in code, after the call:</p>
+<pre><code class="language-python">SLA_CUTS = {                       # (critical_at, review_at)
+    &quot;enterprise&quot;: (0.30, 0.15),    # strict SLA: escalate readily
+    &quot;business&quot;:   (0.50, 0.30),
+    &quot;free&quot;:       (0.80, 0.50),    # only strong signals page anyone
+}
+
+def route(sla, p):
+    crit, review = SLA_CUTS[sla]
+    if p &gt;= crit:   return &quot;CRITICAL  -&gt; page on-call&quot;
+    if p &gt;= review: return &quot;REVIEW    -&gt; human queue&quot;
+    return                 &quot;ROUTINE   -&gt; auto-ack / backlog&quot;
+</code></pre>
+<p class="code-alt">📎 Prefer syntax highlighting? <a href="https://gist.github.com/LaurentPRAT-DB/34e57844b6232f21e27fd9c4ec6fbff0">View as a GitHub Gist</a></p>
+<p>Two identical tickets, different SLA → <strong>identical <code>p</code></strong>, different route. I verified this live on both engines: <code>jev</code> and <code>ai_decide</code> returned the same probability for the duplicated ticket, and the SLA cut did the rest.</p>
+<p>Why put SLA at the cut and not in the prompt?</p>
+<ul>
+<li><strong>In the prompt:</strong> <code>p</code> shifts opaquely, the same text scores differently, and it's hard to audit.</li>
+<li><strong>At the threshold:</strong> <code>p</code> stays content-only and reusable, criticality is a deterministic business rule you can change without re-querying, and it's auditable.</li>
+</ul>
+<p>Bonus: because <code>p</code> is SLA-blind, you <strong>query once</strong> and can re-threshold for any tier — or add a new tier — with <strong>zero</strong> extra model calls. That matters when you're paying per call <em>and</em> running a high-volume queue.</p>
+<hr />
+<h2>Try it yourself</h2>
+<p><strong>Path 1 — offline (no API, 2 min).</strong> The example repo ships a keyword-heuristic stub so you can see the routing logic without spending anything:</p>
+<pre><code class="language-bash">git clone https://github.com/LaurentPRAT-DB/Jev_test1.git
+cd Jev_test1/examples/sla_queue
+python run.py            # stub backend, no credit
+python -m pytest test_router.py -q
+</code></pre>
+<p><strong>Path 2 — live <code>jev</code> (1 batched call).</strong> Set <code>TYPESAFE_API_KEY</code>, then <code>python run.py --engine jev</code>.</p>
+<p><strong>Path 3 — live <code>ai_decide</code>.</strong> On Databricks (DBR 15.4+), <code>python run.py --engine ai_decide</code> against your SQL warehouse profile.</p>
+<hr />
+<h2>Common gotchas</h2>
+<p><strong>"The noul is always 1 or 0."</strong> No — the engine returns a continuous float. 1/0 only appears <em>after you threshold it</em>. Keep it raw and it stays <code>0.69</code>.</p>
+<p><strong>"<code>jev.decide(bool_threshold=…)</code> gives per-question cuts."</strong> It doesn't — it's one global value for every bool field in the call. For per-question cuts, read the raw probabilities and threshold each field yourself.</p>
+<p><strong>"<code>str</code> fields in my model."</strong> Rejected at decoration time. The model generates no text, so fields must be <code>bool</code>, <code>Literal</code>/<code>Enum</code>, or <code>int</code>/<code>float</code> with <code>Field(ge=…, le=…)</code>.</p>
+<p><strong>Tables in Medium.</strong> (Meta-gotcha for this article.) Medium renders markdown tables as plain text — convert to bullet lists before importing.</p>
+<hr />
+<h2>Resources</h2>
+<ul>
+<li><strong>Example repo (all code + benchmarks):</strong> https://github.com/LaurentPRAT-DB/Jev_test1</li>
+<li><strong><code>jev</code> on PyPI:</strong> https://pypi.org/project/jev/</li>
+<li><strong>Databricks <code>ai_decide</code> docs:</strong> https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_decide</li>
+<li><strong>TypeSafe:</strong> https://typesafe.ai</li>
+</ul>
+<hr />
+<h2>About the author</h2>
+<p>I work in field engineering at Databricks, where I spend a lot of time at the seam between the lakehouse and the application layer. This piece came out of a genuine "wait, these are the same thing?" moment — and the realization that the right answer usually comes down to where the data already lives.</p>
+<hr />
+<p><strong>Did this help?</strong> Give it a clap and follow for more field notes from the lakehouse.</p>
+<p><em>Tags: #Databricks #LLM #DataEngineering #MachineLearning #AI</em></p>
+</body>
+</html>
