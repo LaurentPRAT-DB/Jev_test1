@@ -1,0 +1,49 @@
+{
+  "_comment": "Neutral decision spec shared by both backends: Databricks ai_decide (SQL) and TypeSafe jev (Python). One source of truth for the questions + the test cases, so the exact same decision runs against both engines. kind: bool->noul, choice->choice, score->score.",
+  "questions": [
+    {
+      "name": "department",
+      "kind": "choice",
+      "instructions": "Which team should handle this support ticket?",
+      "options": {
+        "billing": "Payment, charges, refunds, invoices",
+        "technical": "Bugs, crashes, errors, outages",
+        "sales": "Pricing, plans, purchasing, discounts"
+      }
+    },
+    {
+      "name": "is_urgent",
+      "kind": "bool",
+      "instructions": "Is this ticket urgent and in need of a fast response?",
+      "criteria": {
+        "true": "Blocks the customer or involves money loss",
+        "false": "Can wait; informational or has a workaround"
+      }
+    },
+    {
+      "name": "severity",
+      "kind": "score",
+      "instructions": "Rate the severity of the issue.",
+      "levels": ["Trivial", "Minor", "Moderate", "Serious", "Critical"],
+      "ge": 1,
+      "le": 5
+    }
+  ],
+  "cases": [
+    {
+      "id": "double_charge",
+      "state": "I was charged twice for my subscription this month and want a refund!",
+      "expected": { "department": "billing", "is_urgent": true, "severity_min": 3 }
+    },
+    {
+      "id": "login_crash",
+      "state": "The app crashes to a white screen every time I try to log in. Totally unusable.",
+      "expected": { "department": "technical", "is_urgent": true, "severity_min": 3 }
+    },
+    {
+      "id": "volume_discount",
+      "state": "Hi, do you offer volume discounts if we buy 50 seats for our team?",
+      "expected": { "department": "sales", "is_urgent": false, "severity_max": 2 }
+    }
+  ]
+}

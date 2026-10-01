@@ -1,0 +1,94 @@
+{
+  "_comment": "Complex multi-label classification over lengthy support content. Six questions (2 choice, 2 noul, 2 score) per case. Same neutral schema -> runs on both ai_decide (SQL) and jev. Expected values use exact match for choice/bool and _min/_max bands for scores to tolerate sampling noise.",
+  "questions": [
+    {
+      "name": "category",
+      "kind": "choice",
+      "instructions": "Classify the primary intent of this support message into one category.",
+      "options": {
+        "billing": "Charges, refunds, invoices, payment methods, pricing disputes",
+        "technical": "Bugs, crashes, errors, outages, performance, integrations",
+        "account_access": "Login, passwords, MFA, lockouts, account recovery",
+        "sales": "New purchases, upgrades, quotes, plans, demos, procurement",
+        "product_feedback": "Feature requests, suggestions, praise, roadmap input",
+        "legal_compliance": "Data deletion, GDPR/CCPA, contracts, privacy, security review"
+      }
+    },
+    {
+      "name": "sentiment",
+      "kind": "choice",
+      "instructions": "Overall emotional tone of the author toward the company.",
+      "options": {
+        "positive": "Satisfied, appreciative, enthusiastic",
+        "neutral": "Matter-of-fact, informational, no strong emotion",
+        "negative": "Frustrated, angry, disappointed, threatening to leave"
+      }
+    },
+    {
+      "name": "is_urgent",
+      "kind": "noul",
+      "instructions": "Does this require a fast response (hours, not days)?",
+      "criteria": {
+        "true": "Active blocker, money at risk, security exposure, deadline",
+        "false": "Can wait; informational, suggestion, or has a workaround"
+      }
+    },
+    {
+      "name": "requires_human",
+      "kind": "noul",
+      "instructions": "Does resolving this need a human agent rather than an automated reply?",
+      "criteria": {
+        "true": "Judgement, exceptions, legal/financial action, negotiation",
+        "false": "Fully answerable by docs, automation, or self-service"
+      }
+    },
+    {
+      "name": "priority",
+      "kind": "score",
+      "instructions": "Operational priority to assign this ticket.",
+      "levels": ["Very low", "Low", "Medium", "High", "Critical"],
+      "ge": 1,
+      "le": 5
+    },
+    {
+      "name": "churn_risk",
+      "kind": "score",
+      "instructions": "Risk that this customer cancels or downgrades because of this interaction.",
+      "levels": ["None", "Low", "Moderate", "High", "Severe"],
+      "ge": 1,
+      "le": 5
+    }
+  ],
+  "cases": [
+    {
+      "id": "billing_double_charge_angry",
+      "state": "This is the third month in a row that I have been billed TWICE for the same Pro subscription. On the 1st I was charged $49, and then again on the 2nd another $49 hit my card, which pushed my account into overdraft and I was hit with a $35 bank fee. I have emailed support twice already (tickets #88213 and #88455) and nobody has gotten back to me in over a week. At this point I have screenshots of all four duplicate charges over the last two cycles. I need the duplicate charges refunded, the overdraft fee reimbursed, and someone to actually explain why your billing system keeps double-charging loyal customers. If this is not fixed by Friday I am disputing every charge with my bank and cancelling. This is genuinely the worst billing experience I have had with any SaaS product.",
+      "expected": { "category": "billing", "sentiment": "negative", "is_urgent": true, "requires_human": true, "priority_min": 4, "churn_risk_min": 4 }
+    },
+    {
+      "id": "technical_prod_outage",
+      "state": "We are seeing a complete production outage of the ingestion API as of 14:03 UTC. Every POST to /v2/events returns HTTP 503 with body {\"error\":\"upstream connect error or disconnect/reset before headers\"}. Our retry queue has backed up to roughly 1.2 million events and is growing. We confirmed it is not on our side: the same request from your own API playground also 503s, and your status page still shows all-green which is clearly wrong. We are on the Enterprise plan with a contractual 99.95% uptime SLA. This is costing us real money every minute because downstream billing events are not landing. Please escalate to on-call engineering immediately and give us an incident ID and an ETA. Happy to jump on a call. Logs and correlation IDs attached.",
+      "expected": { "category": "technical", "is_urgent": true, "requires_human": true, "priority_min": 4 }
+    },
+    {
+      "id": "account_lockout",
+      "state": "Hi, I think I locked myself out of my account. I changed phones last weekend and did not move my authenticator app over, so now I cannot get past the MFA screen. I tried the recovery codes but I honestly cannot find where I saved them. The email on the account is my old work address (jane@oldcorp.example) which I no longer have access to either. I am not in a huge rush but I do need to get back in before our team review next week so I can pull some reports. What is the process to verify my identity and reset MFA when I have lost both the device and the recovery codes? Thanks for any help.",
+      "expected": { "category": "account_access", "requires_human": true, "is_urgent": false, "churn_risk_max": 3 }
+    },
+    {
+      "id": "sales_enterprise_inquiry",
+      "state": "Hello! I lead platform engineering at a mid-size fintech (around 400 engineers) and we are evaluating your product to replace our in-house event pipeline. We currently process about 2 billion events a month and expect to double within a year. A few questions before we book a demo: (1) do you offer volume-based pricing or committed-use discounts at that scale? (2) is there a dedicated support tier with a named account manager? (3) can you support deployment in eu-central-1 for data residency? (4) do you have SOC 2 Type II and can you share the report under NDA? We have budget approved for this quarter and are comparing three vendors, so a quick turnaround would help your case. Looking forward to it.",
+      "expected": { "category": "sales", "is_urgent": false, "churn_risk_max": 2, "priority_max": 3 }
+    },
+    {
+      "id": "product_feedback_feature",
+      "state": "Just wanted to say we have been using the new dashboard for a couple of months and the team genuinely loves it, the load times are so much better than before. One suggestion that would make it perfect: it would be amazing to be able to save a set of filters as a named view and share that view with teammates via a link. Right now everyone rebuilds the same filters by hand every morning and it is a bit of wasted effort. Bonus points if saved views could be pinned to the top of the list. Not urgent at all, just something that would make a great product even better. Keep up the good work!",
+      "expected": { "category": "product_feedback", "sentiment": "positive", "is_urgent": false, "requires_human": false, "priority_max": 2, "churn_risk_max": 2 }
+    },
+    {
+      "id": "legal_gdpr_erasure",
+      "state": "I am writing to formally exercise my right to erasure under Article 17 of the GDPR. Please delete all personal data you hold about me, including my profile, usage logs, support history, and any data shared with third-party processors or sub-processors, and confirm the deletion in writing within the statutory one-month period. Please also provide the list of any third parties with whom my data has been shared, per Article 15. For the record, this is a formal data subject request and not a general support question; I expect it to be routed to your Data Protection Officer. If my data is not deleted within the required timeframe I will escalate to the relevant supervisory authority. My account email is on file.",
+      "expected": { "category": "legal_compliance", "requires_human": true, "is_urgent": true }
+    }
+  ]
+}

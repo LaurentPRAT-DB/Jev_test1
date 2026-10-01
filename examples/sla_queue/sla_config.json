@@ -1,0 +1,18 @@
+{
+  "_comment": "SLA-aware criticality routing. The model judges CONTENT only (one SLA-blind noul -> raw probability per ticket). SLA is business metadata applied as a per-ticket threshold, NOT sent to the model. Identical content under different SLA -> same p, different route.",
+  "question": {
+    "name": "service_impacting",
+    "kind": "noul",
+    "instructions": "Does this message describe an active, service-impacting problem (something broken, failing, or blocking the customer) right now? Judge only by concrete impact stated in the message, not by tone or politeness.",
+    "criteria": {
+      "true": "An error, outage, failure, data loss, or blocked workflow is actively happening",
+      "false": "A question, feature request, cosmetic nit, praise, or anything with a clear workaround"
+    }
+  },
+  "sla_cuts": {
+    "_doc": "Per-SLA (critical_at, review_at) cut points on the raw probability p. Lower cut = fires on weaker signal = stricter SLA escalates more readily. p>=critical -> page; p>=review -> human queue; else routine.",
+    "enterprise": { "critical": 0.30, "review": 0.15 },
+    "business":   { "critical": 0.50, "review": 0.30 },
+    "free":       { "critical": 0.80, "review": 0.50 }
+  }
+}

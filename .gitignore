@@ -3,4 +3,12 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .env
+.env.*
 .claude/
+
+# secrets — never commit
+doc/
+*_api_key.txt
+*.key
+*secret*
+*token*
